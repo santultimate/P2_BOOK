@@ -7,30 +7,43 @@ import re
 
 # Fonction pour obtenir le contenu HTML d'une page
 def get_soup(url):
-    response = requests.get(url)
-    return BeautifulSoup(response.text, 'html.parser')
+    try:
+        response = requests.get(url)
+        response.raise_for_status()  # Lève une exception si la réponse HTTP est une erreur
+        return BeautifulSoup(response.text, 'html.parser')
+    except requests.exceptions.HTTPError as err:
+        print(f"Erreur HTTP lors de la récupération de la page {url}: {err}")
+        return None
+    except Exception as err:
+        print(f"Erreur lors de la récupération de la page {url}: {err}")
+        return None
 
 # Fonction pour télécharger une image
 def download_image(image_url, save_path):
-    response = requests.get(image_url, stream=True)
-    if response.status_code == 200:
-        with open(save_path, 'wb') as file:
-            for chunk in response.iter_content(1024):
-                file.write(chunk)
+    try:
+        response = requests.get(image_url, stream=True)
+        if response.status_code == 200:
+            with open(save_path, 'wb') as file:
+                for chunk in response.iter_content(1024):
+                    file.write(chunk)
+    except Exception as err:
+        print(f"Erreur lors du téléchargement de l'image {image_url}: {err}")
 
 # Fonction pour extraire toutes les informations d'un livre
 def extract_book_details(book_url):
     soup = get_soup(book_url)
+    if not soup:
+        return None
     
     # Extraire les détails du livre
     title = soup.find('div', class_='product_main').h1.text
-    price_incl_tax = soup.find('th', text='Price (incl. tax)').find_next('td').text
-    price_excl_tax = soup.find('th', text='Price (excl. tax)').find_next('td').text
-    tax = soup.find('th', text='Tax').find_next('td').text
-    availability = soup.find('th', text='Availability').find_next('td').text.strip()
-    product_type = soup.find('th', text='Product Type').find_next('td').text
-    upc = soup.find('th', text='UPC').find_next('td').text
-    num_reviews = soup.find('th', text='Number of reviews').find_next('td').text
+    price_incl_tax = soup.find('th', string='Price (incl. tax)').find_next('td').text
+    price_excl_tax = soup.find('th', string='Price (excl. tax)').find_next('td').text
+    tax = soup.find('th', string='Tax').find_next('td').text
+    availability = soup.find('th', string='Availability').find_next('td').text.strip()
+    product_type = soup.find('th', string='Product Type').find_next('td').text
+    upc = soup.find('th', string='UPC').find_next('td').text
+    num_reviews = soup.find('th', string='Number of reviews').find_next('td').text
     rating = soup.find('p', class_='star-rating')['class'][1]
     
     description_tag = soup.find('meta', {'name': 'description'})
@@ -45,6 +58,9 @@ def extract_book_details(book_url):
 # Fonction pour extraire les informations de tous les livres d'une page
 def extract_books_from_page(category_url, category_name):
     soup = get_soup(category_url)
+    if not soup:
+        return []
+    
     books_data = []
     
     # Trouver tous les livres sur la page
@@ -55,10 +71,10 @@ def extract_books_from_page(category_url, category_name):
         book_url = book.h3.a['href'].replace('../../../', 'http://books.toscrape.com/catalogue/')
         book_details = extract_book_details(book_url)
         
-        # Télécharger l'image du livre
-        save_image(book_details[-1], book_details[0], category_name)
-        
-        books_data.append(book_details[:-1])  # On enlève l'URL de l'image pour le CSV
+        if book_details:
+            # Télécharger l'image du livre
+            save_image(book_details[-1], book_details[0], category_name)
+            books_data.append(book_details[:-1])  # On enlève l'URL de l'image pour le CSV
     
     return books_data
 
@@ -88,9 +104,6 @@ def extract_books_from_category(category_url, category_name):
     while True:
         # Construire l'URL pour chaque page
         url = f"{category_url}/page-{page_number}.html" if page_number > 1 else category_url
-        soup = get_soup(url)
-        
-        # Extraire les livres de la page actuelle
         books = extract_books_from_page(url, category_name)
         if not books:  # Si aucune donnée de livre n'est trouvée, c'est la dernière page
             break
@@ -116,13 +129,15 @@ def save_books_to_csv(books, category_name):
 # Fonction pour extraire les livres de toutes les catégories
 def extract_all_categories(base_url):
     soup = get_soup(base_url)
+    if not soup:
+        return
     
     # Trouver toutes les catégories
     categories = soup.find('ul', class_='nav-list').find_all('a')
     
     # Parcourir chaque catégorie
     for category in categories[1:]:  # Ignorer la première catégorie générale
-        cagtegory_name = category.text.strip().replace(' ', '_')
+        category_name = category.text.strip().replace(' ', '_')
         category_url = f"{base_url}/{category['href']}".replace('index.html', '')
         
         print(f"Extracting books for category: {category_name}")
