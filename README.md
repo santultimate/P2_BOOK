@@ -49,7 +49,7 @@ Pour exécuter le script, suivez les étapes ci-dessous :
 1.  Clonez ce dépôt GitHub sur votre machine locale :
 ```bash
 
-git clone https://github.com/votre-utilisateur/votre-depot.git 
+git clone https://github.com/santultimate/P2_BOOK.git
 ```
 2. Accédez au dossier du projet :
 ```bash
